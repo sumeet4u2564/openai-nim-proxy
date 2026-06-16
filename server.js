@@ -22,7 +22,7 @@ const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
 // 🔥 MINIMUM RESPONSE TOKENS - AI must produce at least this many tokens
-const MIN_TOKENS = 700; // Set to 0 to disable
+const MIN_TOKENS = 600; // Set to 0 to disable
 
 // 🔥 CUSTOM SYSTEM PROMPT - Write your instructions here (e.g. formatting, tone, style)
 // Leave as empty string '' to disable
@@ -31,6 +31,12 @@ Always write responses using proper paragraphs with clear spacing between them.
 Never use bullet points or numbered lists unless explicitly asked.
 Be descriptive and elaborate in your answers.
 `.trim();
+
+// 🔥 USER MESSAGE SUFFIX - Appended to the last user message every request.
+// The model sees this right before it starts generating, so it's very hard to ignore.
+// Edit the text inside the backticks to whatever formatting rules you want enforced.
+// Set to empty string '' to disable.
+const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.]`;
 
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
@@ -62,6 +68,23 @@ function injectSystemPrompt(messages) {
   }
 }
 
+// Helper: append suffix to the last user message so the model sees it right before generating
+function injectUserSuffix(messages) {
+  if (!USER_MESSAGE_SUFFIX) return messages;
+
+  const updated = [...messages];
+  for (let i = updated.length - 1; i >= 0; i--) {
+    if (updated[i].role === 'user') {
+      updated[i] = {
+        ...updated[i],
+        content: updated[i].content + USER_MESSAGE_SUFFIX
+      };
+      break;
+    }
+  }
+  return updated;
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -70,7 +93,8 @@ app.get('/health', (req, res) => {
     reasoning_display: SHOW_REASONING,
     thinking_mode: ENABLE_THINKING_MODE,
     min_tokens: MIN_TOKENS,
-    custom_system_prompt: CUSTOM_SYSTEM_PROMPT ? 'SET' : 'NOT SET'
+    custom_system_prompt: CUSTOM_SYSTEM_PROMPT ? 'SET' : 'NOT SET',
+    user_message_suffix: USER_MESSAGE_SUFFIX ? 'SET' : 'NOT SET'
   });
 });
 
@@ -118,8 +142,8 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    // Inject custom system prompt into messages
-    const finalMessages = injectSystemPrompt(messages);
+    // Inject custom system prompt + user message suffix
+    const finalMessages = injectUserSuffix(injectSystemPrompt(messages));
 
     // Transform OpenAI request to NIM format
     const nimRequest = {
