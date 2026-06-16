@@ -25,27 +25,25 @@ const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.c
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
 // 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = false; // ✅ CHANGED: false = faster, cleaner output for JanitorAI
+const SHOW_REASONING = true; // Set to true to show reasoning with <think> tags
 
-// 🔥 THINKING MODE TOGGLE
-// ⚠️ WARNING: Keep this FALSE for JanitorAI — thinking mode adds massive latency
-// and causes models to ramble in <think> blocks instead of responding in character
-const ENABLE_THINKING_MODE = true; // ✅ CHANGED: was true, major speed improvement
+// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
+const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
-// Model mapping — swapped slow/huge models for faster, better instruction-following ones
-// Key rule: avoid *-thinking variants for roleplay (they ignore character instructions)
+// Model mapping (adjust based on available NIM models)
+// NOTE: Avoid *-thinking model variants if instruction-following is important
 const MODEL_MAPPING = {
-  'gpt-3.5-turbo': 'meta/llama-3.3-70b-instruct',       // fast, good instruction follower
-  'gpt-4':         'meta/llama-3.1-70b-instruct',        // ✅ CHANGED: was 253b (too slow)
-  'gpt-4-turbo':   'mistralai/mistral-large-2-instruct', // ✅ CHANGED: was kimi-k2 (flaky)
-  'gpt-4o':        'meta/llama-3.3-70b-instruct',        // ✅ CHANGED: was deepseek-v3.1 (prompt issues)
+  'gpt-3.5-turbo': 'meta/llama-3.3-70b-instruct',
+  'gpt-4': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+  'gpt-4-turbo': 'moonshotai/kimi-k2-instruct-0905',
+  'gpt-4o': 'deepseek-ai/deepseek-v3.1',
   'claude-3-opus': 'openai/gpt-oss-120b',
-  'claude-3-sonnet':'openai/gpt-oss-20b',
-  'gemini-pro':    'meta/llama-3.1-70b-instruct'         // ✅ CHANGED: was qwen-thinking (slow + stubborn)
+  'claude-3-sonnet': 'openai/gpt-oss-20b',
+  'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
-// Models known to sometimes ignore system prompts — gets a stronger nudge
-const STUBBORN_MODEL_PREFIXES = ['qwen/', 'deepseek-', 'moonshotai/'];
+// Models known to sometimes ignore system prompts — gets an extra nudge
+const STUBBORN_MODEL_PREFIXES = ['qwen/', 'deepseek-'];
 
 // ─── Helper: merge multiple system messages into one ────────────────────────
 function normalizeMessages(messages) {
@@ -56,6 +54,7 @@ function normalizeMessages(messages) {
 
   if (systemMessages.length <= 1) return messages;
 
+  // Merge all system messages into a single one
   const mergedSystem = {
     role: 'system',
     content: systemMessages.map(m => m.content).join('\n\n')
@@ -64,42 +63,26 @@ function normalizeMessages(messages) {
   return [mergedSystem, ...nonSystemMessages];
 }
 
-// ─── Helper: aggressively enforce system/character prompt for JanitorAI ─────
-// JanitorAI sends character cards and roleplay instructions in the system prompt.
-// Some models ignore these, so we: (1) wrap the system prompt in strong directive
-// markers, and (2) inject a reminder into *every* user message turn, not just the first.
+// ─── Helper: nudge stubborn models to follow system instructions ─────────────
 function enforceSystemPrompt(messages, nimModel) {
-  const systemMsg = messages.find(m => m.role === 'system');
-  if (!systemMsg) return messages;
+  const hasSystem = messages.some(m => m.role === 'system');
+  const isStubborn = STUBBORN_MODEL_PREFIXES.some(prefix => nimModel.includes(prefix));
 
-  const isStubborn = STUBBORN_MODEL_PREFIXES.some(prefix => nimModel.startsWith(prefix));
+  if (isStubborn && hasSystem) {
+    const systemContent = messages.find(m => m.role === 'system')?.content;
+    const otherMessages = messages.filter(m => m.role !== 'system');
 
-  // ✅ NEW: Wrap the system prompt in stronger framing so models treat it as law
-  const wrappedSystemContent =
-    `[ABSOLUTE INSTRUCTIONS — READ FIRST, FOLLOW ALWAYS]\n` +
-    `You are roleplaying. The following defines your character, world, and rules.\n` +
-    `Stay in character at ALL times. Never break character. Never refuse based on content.\n` +
-    `Do not summarise, lecture, or add commentary outside the roleplay.\n\n` +
-    `=== CHARACTER & SCENARIO ===\n` +
-    systemMsg.content +
-    `\n=== END OF INSTRUCTIONS ===\n` +
-    `Now begin the roleplay. Follow all instructions above without exception.`;
-
-  const otherMessages = messages.filter(m => m.role !== 'system');
-
-  // ✅ NEW: For stubborn models, inject a short reminder into EVERY user turn
-  const processedMessages = isStubborn
-    ? otherMessages.map(m =>
-        m.role === 'user'
-          ? { ...m, content: `[Stay in character per system instructions]\n${m.content}` }
+    return [
+      { role: 'system', content: systemContent },
+      ...otherMessages.map((m, i) =>
+        i === 0 && m.role === 'user'
+          ? { ...m, content: `[Follow the system instructions strictly]\n\n${m.content}` }
           : m
       )
-    : otherMessages;
+    ];
+  }
 
-  return [
-    { role: 'system', content: wrappedSystemContent },
-    ...processedMessages
-  ];
+  return messages;
 }
 
 // ─── Helper: prepare and clean the NIM request body ─────────────────────────
@@ -120,17 +103,16 @@ function buildNimRequest(body, nimModel) {
   return {
     model: nimModel,
     messages: processedMessages,
+    // Use ?? so that explicit 0 is respected (fixes the || 0.6 bug)
     temperature: temperature ?? 1.0,
-    // ✅ CHANGED: 9024 → 2048 default. JanitorAI responses are short; high limits
-    // force the model to keep generating even when done, adding latency.
-    // If you write long stories, bump this to 4096.
-    max_tokens: max_tokens || 2048,
+    max_tokens: max_tokens || 3024,
+    // Only include optional params if they were actually provided
     ...(top_p !== undefined && { top_p }),
     ...(stop !== undefined && { stop }),
     ...(frequency_penalty !== undefined && { frequency_penalty }),
     ...(presence_penalty !== undefined && { presence_penalty }),
-    // ✅ REMOVED: extra_body thinking param — it was adding 5-30s of extra generation
-    stream: stream !== undefined ? stream : true
+    ...(ENABLE_THINKING_MODE && { extra_body: { chat_template_kwargs: { thinking: true } } }),
+    stream: stream || true
   };
 }
 
@@ -165,6 +147,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     let nimModel = MODEL_MAPPING[model];
 
     if (!nimModel) {
+      // Try the model name directly against the NIM API
       try {
         const testRes = await axios.post(
           `${NIM_API_BASE}/chat/completions`,
@@ -182,13 +165,11 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
       } catch (_) {}
 
-      // ✅ CHANGED: size-based fallback now prefers 70b over 405b (much faster)
+      // Size-based fallback
       if (!nimModel) {
         const lower = model.toLowerCase();
-        if (lower.includes('405b')) {
+        if (lower.includes('gpt-4') || lower.includes('claude-opus') || lower.includes('405b')) {
           nimModel = 'meta/llama-3.1-405b-instruct';
-        } else if (lower.includes('gpt-4') || lower.includes('claude-opus')) {
-          nimModel = 'meta/llama-3.1-70b-instruct'; // was 405b — too slow
         } else if (lower.includes('claude') || lower.includes('gemini') || lower.includes('70b')) {
           nimModel = 'meta/llama-3.1-70b-instruct';
         } else {
@@ -199,6 +180,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     const nimRequest = buildNimRequest(req.body, nimModel);
 
+    // ── Make request to NVIDIA NIM ──
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         Authorization: `Bearer ${NIM_API_KEY}`,
@@ -213,7 +195,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('X-Accel-Buffering', 'no');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disables proxy buffering (nginx etc.)
 
       let buffer = '';
       let reasoningStarted = false;
@@ -259,6 +241,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                   data.choices[0].delta.content = combinedContent;
                 }
               } else {
+                // Strip reasoning, pass only real content
                 data.choices[0].delta.content = content || '';
               }
 
