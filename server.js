@@ -105,7 +105,7 @@ function buildNimRequest(body, nimModel) {
     messages: processedMessages,
     // Use ?? so that explicit 0 is respected (fixes the || 0.6 bug)
     temperature: temperature ?? 1.0,
-    max_tokens: max_tokens || 3024,
+    max_tokens: Math.max(max_tokens || 3024, 700)
     // Only include optional params if they were actually provided
     ...(top_p !== undefined && { top_p }),
     ...(stop !== undefined && { stop }),
