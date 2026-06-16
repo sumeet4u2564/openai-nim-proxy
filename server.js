@@ -22,7 +22,7 @@ const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
 // 🔥 MINIMUM RESPONSE TOKENS - AI must produce at least this many tokens
-const MIN_TOKENS = 600; // Set to 0 to disable
+const MIN_TOKENS = 500; // Set to 0 to disable
 
 // 🔥 CUSTOM SYSTEM PROMPT - Write your instructions here (e.g. formatting, tone, style)
 // Leave as empty string '' to disable
