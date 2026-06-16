@@ -100,33 +100,13 @@ function buildNimRequest(body, nimModel) {
 
   const processedMessages = enforceSystemPrompt(normalizeMessages(messages), nimModel);
 
-function buildNimRequest(body, nimModel) {
-  const {
-    messages,
-    temperature,
-    max_tokens,
-    stream,
-    top_p,
-    stop,
-    frequency_penalty,
-    presence_penalty
-  } = body;
-
-  // 1. Inject a requirement for at least 700 tokens into the message stream
-  const lengthEnforcedMessages = [
-    { role: 'system', content: 'CRITICAL: Your response MUST be long, highly detailed, descriptive, and at least 700 tokens in length. Do not wrap up or cut the response short early.' },
-    ...(messages || [])
-  ];
-
-  // 2. Pass the updated messages into your existing processors
-  const processedMessages = enforceSystemPrompt(normalizeMessages(lengthEnforcedMessages), nimModel);
-
   return {
     model: nimModel,
     messages: processedMessages,
+    // Use ?? so that explicit 0 is respected (fixes the || 0.6 bug)
     temperature: temperature ?? 1.0,
-    // 3. Ensure max_tokens is high enough to allow 700+ tokens (Math.max protects it from being overridden too low)
-    max_tokens: Math.max(max_tokens || 3024, 700),
+    max_tokens: max_tokens || 9024,
+    // Only include optional params if they were actually provided
     ...(top_p !== undefined && { top_p }),
     ...(stop !== undefined && { stop }),
     ...(frequency_penalty !== undefined && { frequency_penalty }),
@@ -344,4 +324,5 @@ app.listen(PORT, () => {
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`Reasoning display: ${SHOW_REASONING ? 'ENABLED' : 'DISABLED'}`);
   console.log(`Thinking mode:     ${ENABLE_THINKING_MODE ? 'ENABLED' : 'DISABLED'}`);
+});
 });
