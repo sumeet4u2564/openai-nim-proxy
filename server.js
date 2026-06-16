@@ -36,7 +36,7 @@ Be descriptive and elaborate in your answers.
 // The model sees this right before it starts generating, so it's very hard to ignore.
 // Edit the text inside the backticks to whatever formatting rules you want enforced.
 // Set to empty string '' to disable.
-const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.], [Narrative rule: You are co-writing a continuous story. Every response must: (1) follow naturally from what just happened, (2) develop or escalate the situation, (3) hint at or move toward what comes next. Never write a response that could stand alone — it must feel like a chapter in a larger story.]`;
+const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.], [Narrative rule: You are co-writing a continuous story. Every response must: (1) follow naturally from what just happened, (2) develop or escalate the situation, (3) hint at or move toward what comes next. Never write a response that could stand alone — it must feel like a chapter in a larger story.], [Roleplay rule: You control only your own character(s) and the world around the user. Never put words in the user's mouth, never write their actions, never assume their next move. Only respond to what they have already written.]`;
 
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
