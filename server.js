@@ -6,9 +6,19 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Middleware — explicit CORS so browsers don't block preflight or streaming
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'anthropic-version'],
+  exposedHeaders: ['Content-Type'],
+  credentials: false
+}));
+
+// Handle OPTIONS preflight explicitly (some clients send it before POST)
+app.options('*', cors());
+
+app.use(express.json({ limit: '10mb' }));
 
 // NVIDIA NIM API configuration
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
@@ -94,7 +104,7 @@ function buildNimRequest(body, nimModel) {
     model: nimModel,
     messages: processedMessages,
     // Use ?? so that explicit 0 is respected (fixes the || 0.6 bug)
-    temperature: temperature ?? 0.3,
+    temperature: temperature ?? 1.0,
     max_tokens: max_tokens || 9024,
     // Only include optional params if they were actually provided
     ...(top_p !== undefined && { top_p }),
@@ -102,7 +112,7 @@ function buildNimRequest(body, nimModel) {
     ...(frequency_penalty !== undefined && { frequency_penalty }),
     ...(presence_penalty !== undefined && { presence_penalty }),
     ...(ENABLE_THINKING_MODE && { extra_body: { chat_template_kwargs: { thinking: true } } }),
-    stream: stream || false
+    stream: stream || true
   };
 }
 
@@ -184,6 +194,8 @@ app.post('/v1/chat/completions', async (req, res) => {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disables proxy buffering (nginx etc.)
 
       let buffer = '';
       let reasoningStarted = false;
