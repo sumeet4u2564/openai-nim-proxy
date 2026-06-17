@@ -1,4 +1,4 @@
-// server.js - OpenAI to NVIDIA NIM API Proxy
+// server.js - OpenAI to NVIDIA NIM API Proxy (DeepSeek-V4-Pro)
 
 const express = require('express');
 const cors = require('cors');
@@ -7,7 +7,6 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -15,47 +14,31 @@ app.use(express.json());
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
+// The only model we use
+const NIM_MODEL = 'deepseek-ai/deepseek-v4-pro';
+
 // 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
 const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 
-// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
-
-// 🔥 MINIMUM RESPONSE TOKENS - AI must produce at least this many tokens
+// 🔥 MINIMUM RESPONSE TOKENS
 const MIN_TOKENS = 500; // Set to 0 to disable
 
-// 🔥 CUSTOM SYSTEM PROMPT - Write your instructions here (e.g. formatting, tone, style)
-// Leave as empty string '' to disable
+// 🔥 CUSTOM SYSTEM PROMPT
 const CUSTOM_SYSTEM_PROMPT = `
 Always write responses using proper paragraphs with clear spacing between them.
 Never use bullet points or numbered lists unless explicitly asked.
 Be descriptive and elaborate in your answers.
 `.trim();
 
-// 🔥 USER MESSAGE SUFFIX - Appended to the last user message every request.
-// The model sees this right before it starts generating, so it's very hard to ignore.
-// Edit the text inside the backticks to whatever formatting rules you want enforced.
-// Set to empty string '' to disable.
+// 🔥 USER MESSAGE SUFFIX
 const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.], [Roleplay rule: The user's character belongs exclusively to the user. Do not write any dialogue, internal thoughts, physical actions, or decisions for them — not even small ones like nodding or sighing. React to the user, never speak for them.],`;
 
-// Model mapping (adjust based on available NIM models)
-const MODEL_MAPPING = {
-  'gpt-3.5-turbo': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  'gpt-4': 'qwen/qwen3-coder-480b-a35b-instruct',
-  'gpt-4-turbo': 'moonshotai/kimi-k2-instruct-0905',
-  'gpt-4o': 'deepseek-ai/deepseek-v3.1',
-  'claude-3-opus': 'deepseek-ai/deepseek-v4-pro',
-  'claude-3-sonnet': 'openai/gpt-oss-20b',
-  'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
-};
-
-// Helper: inject custom system prompt into message array
+// Helper: inject custom system prompt
 function injectSystemPrompt(messages) {
   if (!CUSTOM_SYSTEM_PROMPT) return messages;
 
   const systemIndex = messages.findIndex(m => m.role === 'system');
   if (systemIndex !== -1) {
-    // Merge with existing system message
     const updated = [...messages];
     updated[systemIndex] = {
       ...updated[systemIndex],
@@ -63,12 +46,11 @@ function injectSystemPrompt(messages) {
     };
     return updated;
   } else {
-    // Prepend a fresh system message
     return [{ role: 'system', content: CUSTOM_SYSTEM_PROMPT }, ...messages];
   }
 }
 
-// Helper: append suffix to the last user message so the model sees it right before generating
+// Helper: append suffix to last user message
 function injectUserSuffix(messages) {
   if (!USER_MESSAGE_SUFFIX) return messages;
 
@@ -85,78 +67,50 @@ function injectUserSuffix(messages) {
   return updated;
 }
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'OpenAI to NVIDIA NIM Proxy',
+    model: NIM_MODEL,
     reasoning_display: SHOW_REASONING,
-    thinking_mode: ENABLE_THINKING_MODE,
     min_tokens: MIN_TOKENS,
     custom_system_prompt: CUSTOM_SYSTEM_PROMPT ? 'SET' : 'NOT SET',
     user_message_suffix: USER_MESSAGE_SUFFIX ? 'SET' : 'NOT SET'
   });
 });
 
-// List models endpoint (OpenAI compatible)
+// List models (OpenAI compatible)
 app.get('/v1/models', (req, res) => {
-  const models = Object.keys(MODEL_MAPPING).map(model => ({
-    id: model,
-    object: 'model',
-    created: Date.now(),
-    owned_by: 'nvidia-nim-proxy'
-  }));
-  res.json({ object: 'list', data: models });
+  res.json({
+    object: 'list',
+    data: [{
+      id: 'gpt-4',
+      object: 'model',
+      created: Date.now(),
+      owned_by: 'nvidia-nim-proxy'
+    }]
+  });
 });
 
-// Chat completions endpoint (main proxy)
+// Chat completions (main proxy)
 app.post('/v1/chat/completions', async (req, res) => {
   try {
-    const { model, messages, temperature, max_tokens, stream } = req.body;
+    const { messages, temperature, max_tokens, stream } = req.body;
 
-    // Smart model selection with fallback
-    let nimModel = MODEL_MAPPING[model];
-    if (!nimModel) {
-      try {
-        await axios.post(`${NIM_API_BASE}/chat/completions`, {
-          model: model,
-          messages: [{ role: 'user', content: 'test' }],
-          max_tokens: 1
-        }, {
-          headers: { 'Authorization': `Bearer ${NIM_API_KEY}`, 'Content-Type': 'application/json' },
-          validateStatus: (status) => status < 500
-        }).then(res => {
-          if (res.status >= 200 && res.status < 300) nimModel = model;
-        });
-      } catch (e) {}
-
-      if (!nimModel) {
-        const modelLower = model.toLowerCase();
-        if (modelLower.includes('gpt-4') || modelLower.includes('claude-opus') || modelLower.includes('405b')) {
-          nimModel = 'meta/llama-3.1-405b-instruct';
-        } else if (modelLower.includes('claude') || modelLower.includes('gemini') || modelLower.includes('70b')) {
-          nimModel = 'meta/llama-3.1-70b-instruct';
-        } else {
-          nimModel = 'meta/llama-3.1-8b-instruct';
-        }
-      }
-    }
-
-    // Inject custom system prompt + user message suffix
     const finalMessages = injectUserSuffix(injectSystemPrompt(messages));
 
-    // Transform OpenAI request to NIM format
     const nimRequest = {
-      model: nimModel,
+      model: NIM_MODEL,
       messages: finalMessages,
       temperature: temperature || 0.8,
-      max_tokens: max_tokens || 7000,
-      min_tokens: MIN_TOKENS || undefined,   // 🔥 Minimum response length
-      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
+      max_tokens: max_tokens || 9024,
+      ...(MIN_TOKENS > 0 && { min_tokens: MIN_TOKENS }),
+      // NIM requires BOTH enable_thinking AND thinking set to true, plus reasoning_effort
+      chat_template_kwargs: { enable_thinking: true, thinking: true, reasoning_effort: 'high' },
       stream: stream || false
     };
 
-    // Make request to NVIDIA NIM API
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
@@ -166,7 +120,6 @@ app.post('/v1/chat/completions', async (req, res) => {
     });
 
     if (stream) {
-      // Handle streaming response with reasoning
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -210,11 +163,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                     delete data.choices[0].delta.reasoning_content;
                   }
                 } else {
-                  if (content) {
-                    data.choices[0].delta.content = content;
-                  } else {
-                    data.choices[0].delta.content = '';
-                  }
+                  data.choices[0].delta.content = content || '';
                   delete data.choices[0].delta.reasoning_content;
                 }
               }
@@ -233,12 +182,11 @@ app.post('/v1/chat/completions', async (req, res) => {
       });
 
     } else {
-      // Transform NIM response to OpenAI format with reasoning
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
-        model: model,
+        model: req.body.model,
         choices: response.data.choices.map(choice => {
           let fullContent = choice.message?.content || '';
           if (SHOW_REASONING && choice.message?.reasoning_content) {
@@ -260,10 +208,10 @@ app.post('/v1/chat/completions', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Proxy error:', error.message);
+    console.error('Proxy error:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json({
       error: {
-        message: error.message || 'Internal server error',
+        message: error.response?.data?.detail || error.message || 'Internal server error',
         type: 'invalid_request_error',
         code: error.response?.status || 500
       }
@@ -271,7 +219,7 @@ app.post('/v1/chat/completions', async (req, res) => {
   }
 });
 
-// Catch-all for unsupported endpoints
+// Catch-all
 app.all('*', (req, res) => {
   res.status(404).json({
     error: {
@@ -284,9 +232,9 @@ app.all('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`OpenAI to NVIDIA NIM Proxy running on port ${PORT}`);
+  console.log(`Model: ${NIM_MODEL}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`Reasoning display: ${SHOW_REASONING ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`Thinking mode: ${ENABLE_THINKING_MODE ? 'ENABLED' : 'DISABLED'}`);
   console.log(`Min tokens: ${MIN_TOKENS}`);
   console.log(`Custom system prompt: ${CUSTOM_SYSTEM_PROMPT ? 'SET' : 'NOT SET'}`);
 });
