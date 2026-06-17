@@ -46,6 +46,43 @@ const MODEL_MAPPING = {
   'stepfun-ai/step-3.7-flash': 'mistralai/mistral-medium-3.5-128b',
 };
 
+// 🔥 RETRY CONFIGURATION
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 1000; // Base delay in ms (doubles each attempt)
+
+async function makeRequestWithRetry(nimRequest) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
+        headers: {
+          'Authorization': `Bearer ${NIM_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        responseType: nimRequest.stream ? 'stream' : 'json'
+      });
+      return response; // Success — return immediately
+    } catch (error) {
+      const isLast = attempt === MAX_RETRIES;
+      const status = error.response?.status;
+
+      // Don't retry on client errors (bad request, auth failure, etc.)
+      if (status && status >= 400 && status < 500) {
+        console.error(`Non-retryable error (${status}), giving up.`);
+        throw error;
+      }
+
+      if (isLast) {
+        console.error(`All ${MAX_RETRIES} attempts failed. Last error: ${error.message}`);
+        throw error;
+      }
+
+      const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1); // Exponential backoff
+      console.warn(`Attempt ${attempt}/${MAX_RETRIES} failed (${status || error.message}). Retrying in ${delay}ms...`);
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+}
+
 // Helper: inject custom system prompt into message array
 function injectSystemPrompt(messages) {
   if (!CUSTOM_SYSTEM_PROMPT) return messages;
@@ -153,14 +190,8 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream: stream || false
     };
 
-    // Make request to NVIDIA NIM API
-    const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
-      headers: {
-        'Authorization': `Bearer ${NIM_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      responseType: stream ? 'stream' : 'json'
-    });
+    // Make request to NVIDIA NIM API with automatic retry
+    const response = await makeRequestWithRetry(nimRequest);
 
     if (stream) {
       // Handle streaming response with reasoning
