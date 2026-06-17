@@ -22,7 +22,7 @@ const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
 
 // 🔥 MINIMUM RESPONSE TOKENS - AI must produce at least this many tokens
-const MIN_TOKENS = 0; // Set to 0 to disable
+const MIN_TOKENS = 400; // Set to 0 to disable
 
 // 🔥 CUSTOM SYSTEM PROMPT - Write your instructions here (e.g. formatting, tone, style)
 // Leave as empty string '' to disable
@@ -149,7 +149,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const nimRequest = {
       model: nimModel,
       messages: finalMessages,
-      temperature: temperature || 0.8,
+      temperature: temperature || 0.6,
       max_tokens: max_tokens || 3024,
       min_tokens: MIN_TOKENS || undefined,   // 🔥 Minimum response length
       extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
