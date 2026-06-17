@@ -271,13 +271,6 @@ app.post('/v1/chat/completions', async (req, res) => {
   }
 });
 
-// If using axios
-console.error(error.response?.data)
-
-// If using fetch
-const text = await response.text()
-console.error(text)
-
 // Catch-all for unsupported endpoints
 app.all('*', (req, res) => {
   res.status(404).json({
