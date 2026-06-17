@@ -42,6 +42,8 @@ const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearl
 const MODEL_MAPPING = {
   'deepseek-ai/deepseek-v4-pro': 'deepseek-ai/deepseek-v4-flash',
   'deepseek/deepseek-v3.2': 'deepseek/deepseek-chat-v3.1',
+  'moonshotai/kimi-k2.6': 'moonshotai/kimi-k2-instruct-0905',
+  'stepfun-ai/step-3.7-flash': 'mistralai/mistral-medium-3.5-128b',
 };
 
 // Helper: inject custom system prompt into message array
