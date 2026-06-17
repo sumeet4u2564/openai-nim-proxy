@@ -19,10 +19,7 @@ const NIM_API_KEY = process.env.NIM_API_KEY;
 const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = true; // Set to true to enable chat_template_kwargs thinking parameter
-
-// 🔥 MINIMUM RESPONSE TOKENS - AI must produce at least this many tokens
-const MIN_TOKENS = 400; // Set to 0 to disable
+const ENABLE_THINKING_MODE = false; // Set to true to enable chat_template_kwargs thinking parameter
 
 // 🔥 CUSTOM SYSTEM PROMPT - Write your instructions here (e.g. formatting, tone, style)
 // Leave as empty string '' to disable
