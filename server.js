@@ -74,6 +74,7 @@ app.get('/health', (req, res) => {
     service: 'OpenAI to NVIDIA NIM Proxy',
     model: NIM_MODEL,
     reasoning_display: SHOW_REASONING,
+    thinking_mode: ENABLE_THINKING_MODE,
     min_tokens: MIN_TOKENS,
     custom_system_prompt: CUSTOM_SYSTEM_PROMPT ? 'SET' : 'NOT SET',
     user_message_suffix: USER_MESSAGE_SUFFIX ? 'SET' : 'NOT SET'
