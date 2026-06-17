@@ -41,7 +41,6 @@ const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearl
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
   'deepseek-ai/deepseek-v4-pro': 'deepseek-ai/deepseek-v4-flash',
-  'deepseek-ai/DeepSeek-V3.1'
 };
 
 // Helper: inject custom system prompt into message array
