@@ -36,7 +36,7 @@ Be descriptive and elaborate in your answers.
 // The model sees this right before it starts generating, so it's very hard to ignore.
 // Edit the text inside the backticks to whatever formatting rules you want enforced.
 // Set to empty string '' to disable.
-const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.], [Roleplay rule: The user's character belongs exclusively to the user. Do not write any dialogue, internal thoughts, physical actions, or decisions for them — not even small ones like nodding or sighing. React to the user, never speak for them.],`;
+const USER_MESSAGE_SUFFIX = `\n\n[Formatting rule: Write your response in clearly separated paragraphs. Press Enter twice between each paragraph. Never write a wall of unbroken text.], [Roleplay rule: The user's character belongs exclusively to the user. Do not write any dialogue, internal thoughts, physical actions, or decisions for them — not even small ones like nodding or sighing. React to the user, never speak for them.], [Writing rule: Avoid on-the-nose writing. Never have characters directly state what they feel, want, or intend. Express inner states through: subtle body language, hesitation, contradiction between words and actions, environmental details, and subtext in dialogue. What is left unsaid is as important as what is said.]`;
 
 // Model mapping (adjust based on available NIM models)
 const MODEL_MAPPING = {
@@ -143,7 +143,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const nimRequest = {
       model: nimModel,
       messages: finalMessages,
-      temperature: temperature || 0.8,
+      temperature: temperature || 0.6,
       max_tokens: max_tokens || 9024,
       min_tokens: MIN_TOKENS || undefined,   // 🔥 Minimum response length
       extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
