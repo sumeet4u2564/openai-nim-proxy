@@ -20,6 +20,9 @@ const NIM_MODEL = 'deepseek-ai/deepseek-v4-pro';
 // 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
 const SHOW_REASONING = false; // Set to true to show reasoning with <think> tags
 
+// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
+const ENABLE_THINKING_MODE = true;
+
 // 🔥 MINIMUM RESPONSE TOKENS
 const MIN_TOKENS = 500; // Set to 0 to disable
 
